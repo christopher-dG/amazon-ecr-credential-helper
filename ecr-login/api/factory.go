@@ -18,6 +18,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecrpublic"
 	"github.com/aws/smithy-go/middleware"
@@ -44,13 +45,18 @@ type ClientFactory interface {
 // DefaultClientFactory is a default implementation of the ClientFactory
 type DefaultClientFactory struct{}
 
-var userAgentLoadOption = config.WithAPIOptions([]func(*middleware.Stack) error{
-	http.AddHeaderValue("User-Agent", "amazon-ecr-credential-helper/"+version.Version),
-})
+var (
+	userAgentLoadOption = config.WithAPIOptions([]func(*middleware.Stack) error{
+		http.AddHeaderValue("User-Agent", "amazon-ecr-credential-helper/"+version.Version),
+	})
+	mfaLoadOption = config.WithAssumeRoleCredentialOptions(func(o *stscreds.AssumeRoleOptions) {
+		o.TokenProvider = stscreds.StdinTokenProvider
+	})
+)
 
 // NewClientWithDefaults creates the client and defaults region
 func (defaultClientFactory DefaultClientFactory) NewClientWithDefaults() Client {
-	awsConfig, err := config.LoadDefaultConfig(context.TODO(), userAgentLoadOption)
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(), userAgentLoadOption, mfaLoadOption)
 	if err != nil {
 		panic(err)
 	}
@@ -63,6 +69,7 @@ func (defaultClientFactory DefaultClientFactory) NewClientWithFipsEndpoint(regio
 	awsConfig, err := config.LoadDefaultConfig(
 		context.TODO(),
 		userAgentLoadOption,
+		mfaLoadOption,
 		config.WithRegion(region),
 		config.WithEndpointDiscovery(aws.EndpointDiscoveryEnabled),
 	)
@@ -78,6 +85,7 @@ func (defaultClientFactory DefaultClientFactory) NewClientFromRegion(region stri
 	awsConfig, err := config.LoadDefaultConfig(
 		context.TODO(),
 		userAgentLoadOption,
+		mfaLoadOption,
 		config.WithRegion(region),
 	)
 	if err != nil {
